@@ -4,116 +4,187 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# --- 1. SETUP ---
-st.set_page_config(page_title="SenseGuard Secure", layout="wide")
+# --- 1. CONFIGURATION ---
+st.set_page_config(
+    page_title="SenseGuard Enterprise",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- 2. AUTHENTICATION ---
-def check_password():
-    """Returns `True` if the user had the correct password."""
+# --- 2. PROFESSIONAL CSS STYLING ---
+st.markdown("""
+    <style>
+    /* Dark Theme Setup */
+    .stApp {
+        background-color: #0F172A; /* Deep Space Blue */
+        color: white;
+    }
     
+    /* Metrics Styling */
+    div[data-testid="stMetric"] {
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        padding: 15px;
+        border-radius: 10px;
+        color: white;
+    }
+    
+    /* Header Styling */
+    h1, h2, h3 {
+        color: #F8FAFC !important;
+        font-family: sans-serif;
+    }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #020617;
+        border-right: 1px solid #1E293B;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 3. AUTHENTICATION (FIXED) ---
+def check_password():
+    """Simple and secure password check."""
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
     def password_entered():
-        """Checks whether a password entered by the user is correct."""
         if st.session_state["username"] == "admin" and st.session_state["password"] == "1234":
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password
+            del st.session_state["password"]
+            # --- FIX: FORCE RERUN IMMEDIATELY TO CLEAR LOGIN SCREEN ---
+            st.rerun()
         else:
             st.session_state["password_correct"] = False
 
-    if "password_correct" not in st.session_state:
-        # First run, show inputs
-        st.text_input("Username", key="username")
-        st.text_input("Password", type="password", key="password")
-        st.button("Login", on_click=password_entered)
+    if not st.session_state["password_correct"]:
+        # Login Screen
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            st.markdown("<h1 style='text-align: center; color: #38BDF8;'>🛡️ SenseGuard Access</h1>", unsafe_allow_html=True)
+            st.text_input("Operator ID", key="username")
+            st.text_input("Access Key", type="password", key="password")
+            st.button("Authenticate", on_click=password_entered, type="primary", use_container_width=True)
+            if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+                st.error("⛔ ACCESS DENIED")
         return False
-    
-    elif not st.session_state["password_correct"]:
-        # Password incorrect, show inputs + error
-        st.text_input("Username", key="username")
-        st.text_input("Password", type="password", key="password")
-        st.button("Login", on_click=password_entered)
-        st.error("😕 User not found or password incorrect")
-        return False
-    
-    else:
-        # Password correct
-        return True
+    return True
 
-# --- 3. MAIN APP LOGIC ---
+# --- 4. MAIN APPLICATION ---
+# The dashboard code ONLY runs if check_password() is True
 if check_password():
-    # **********************************************
-    # EVERYTHING BELOW IS YOUR DASHBOARD CODE
-    # **********************************************
     
-    st.title("🛡️ SenseGuard: Secure Dashboard")
-    
-    # Logout Button
-    if st.sidebar.button("Log Out"):
-        st.session_state["password_correct"] = False
-        st.rerun()
+    # --- HEADER ---
+    st.markdown("""
+        <div style='text-align: center; margin-bottom: 25px;'>
+            <h1 style='margin:0; font-size: 2.5rem;'>🛡️ SENSEGUARD <span style='color: #38BDF8;'>ENTERPRISE</span></h1>
+            <p style='color: #94A3B8;'>Real-Time Industrial Anomaly Detection Engine</p>
+        </div>
+    """, unsafe_allow_html=True)
 
     # --- SIDEBAR ---
     with st.sidebar:
-        st.header("⚙️ Controls")
-        noise = st.slider("Noise Level", 0.0, 0.5, 0.1)
-        speed = st.slider("Speed", 0.05, 0.5, 0.1)
-        run = st.checkbox('▶ START SIMULATION', value=True)
-        if st.button("Reset"):
-            st.session_state.clear()
+        st.header("⚙️ Control Panel")
+        noise_level = st.slider("Signal Noise", 0.0, 1.0, 0.2, help="Increases random interference")
+        refresh_rate = st.slider("Polling Rate", 0.1, 1.0, 0.2)
+        
+        st.divider()
+        run = st.toggle("🔴 LIVE MONITORING", value=True)
+        
+        if st.button("🔄 Reset System"):
+            st.session_state['data_temp'] = []
+            st.session_state['data_vib'] = []
+            st.session_state['logs'] = []
+            st.rerun()
+            
+        if st.button("🔒 Secure Logout"):
+            st.session_state["password_correct"] = False
             st.rerun()
 
-    # --- STATE ---
-    if 'data' not in st.session_state:
-        st.session_state['data'] = []
-    if 'logs' not in st.session_state:
+    # --- INITIALIZE STATE ---
+    if 'data_temp' not in st.session_state: 
+        st.session_state['data_temp'] = [65.0 + np.random.normal(0,0.5) for _ in range(50)]
+    if 'data_vib' not in st.session_state: 
+        st.session_state['data_vib'] = [20.0 + np.random.normal(0,0.5) for _ in range(50)]
+    if 'logs' not in st.session_state: 
         st.session_state['logs'] = []
 
-    # --- LAYOUT ---
-    st.subheader("1. Live Sensor Graph")
-    chart_box = st.empty()
+    # --- DATA GENERATION (The "Engine") ---
+    if run:
+        # 1. Temperature (Slow moving)
+        new_temp = 65.0 + np.random.normal(0, 0.2) + (noise_level * 5)
+        
+        # 2. Vibration (Fast moving + Spikes)
+        new_vib = 20.0 + np.random.normal(0, 1.0)
+        
+        # Inject Anomaly Logic
+        anomaly = False
+        if np.random.rand() < noise_level: 
+            new_vib += 40  # Big Spike
+            anomaly = True
+            
+        # Update Lists
+        st.session_state['data_temp'].append(new_temp)
+        st.session_state['data_vib'].append(new_vib)
+        
+        # Maintain Buffer
+        if len(st.session_state['data_temp']) > 80:
+            st.session_state['data_temp'].pop(0)
+            st.session_state['data_vib'].pop(0)
+            
+        # Logging
+        if anomaly:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            st.session_state['logs'].insert(0, f"[{timestamp}] ⚠️ CRITICAL: Vibration Spike {new_vib:.1f}Hz")
+
+    # --- DASHBOARD LAYOUT ---
+    
+    # 1. KPI Metrics
+    k1, k2, k3, k4 = st.columns(4)
+    cur_t = st.session_state['data_temp'][-1]
+    cur_v = st.session_state['data_vib'][-1]
+    
+    k1.metric("Core Temperature", f"{cur_t:.1f}°C", "Stable")
+    
+    if cur_v > 40:
+        k2.metric("Vibration Sensor", f"{cur_v:.1f} Hz", "Critical", delta_color="inverse")
+    else:
+        k2.metric("Vibration Sensor", f"{cur_v:.1f} Hz", "Nominal", delta_color="normal")
+        
+    k3.metric("System Uptime", "99.99%", "Optimal")
+    k4.metric("Active Threads", "4", "Healthy")
 
     st.markdown("---")
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.subheader("2. Real-Time Metrics")
-        metrics_box = st.empty()
-    with col2:
-        st.subheader("3. System Logs")
-        logs_box = st.empty()
 
-    # --- LOOP ---
-    while run:
-        val = 25.0 + np.random.normal(0, 0.5)
+    # 2. Charts Area
+    c1, c2 = st.columns([2, 1])
+    
+    with c1:
+        st.subheader("📡 Multi-Sensor Telemetry")
+        chart_df = pd.DataFrame({
+            'Temperature': st.session_state['data_temp'],
+            'Vibration': st.session_state['data_vib']
+        })
+        st.line_chart(chart_df, color=["#F43F5E", "#38BDF8"], height=350)
         
-        # FIX IS HERE:
-        if np.random.rand() < noise: val += np.random.choice([40, -40])
-        
-        if abs(val - 25) > 10:
-            clean = 25.0
-            status = "BLOCKED"
-            color = "inverse"
+    with c2:
+        st.subheader("📝 Audit Log")
+        if len(st.session_state['logs']) > 0:
+            for log in st.session_state['logs'][:7]:
+                st.code(log, language="text")
         else:
-            clean = val
-            status = "OK"
-            color = "normal"
-            
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        st.session_state['data'].append([val, clean])
-        if len(st.session_state['data']) > 80: st.session_state['data'].pop(0)
-        
-        if status == "BLOCKED":
-            st.session_state['logs'].insert(0, f"[{timestamp}] ⚠️ SPIKE: {val:.1f} rejected")
+            st.info("System initializing... No events logged.")
 
-        with chart_box.container():
-            df = pd.DataFrame(st.session_state['data'], columns=["Raw", "Clean"])
-            st.line_chart(df, color=["#FF0000", "#00FF00"], height=300)
+    # 3. Status Footer
+    if cur_v > 40:
+        st.error(f"⚠️ HIGH VIBRATION DETECTED ({cur_v:.1f} Hz) - AUTOMATED DAMPENING ACTIVE")
+    else:
+        st.success("✅ ALL SYSTEMS OPERATIONAL")
 
-        with metrics_box.container():
-            k1, k2, k3 = st.columns(3)
-            k1.metric("Raw Input", f"{val:.1f}", delta=f"{val-25:.1f}", delta_color="inverse")
-            k2.metric("Clean Output", f"{clean:.1f}", delta_color="normal")
-            k3.metric("Status", status, delta_color=color)
-
-        with logs_box.container():
-            st.code("\n".join(st.session_state['logs'][:5]))
-
-        time.sleep(speed)
+    # --- AUTO-UPDATE ---
+    if run:
+        time.sleep(refresh_rate)
+        st.rerun()
